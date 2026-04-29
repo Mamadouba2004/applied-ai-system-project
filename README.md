@@ -1,17 +1,19 @@
-# 🎵 Music Recommender Simulation
+# 🎵 Music Recommender with RAG + Claude API
 
 ## Project Summary
 
-In this project you will build and explain a small music recommender system.
+This project extends the Module 3 music recommender simulation by adding a
+Retrieval-Augmented Generation (RAG) layer powered by the Claude API. The base
+system uses content-based filtering to score songs against a user taste profile
+across three configurable scoring modes. The RAG layer retrieves the full song
+catalog as structured context, passes it to Claude along with the scoring
+results, and generates a natural-language explanation of why the recommendations
+fit (or fail to fit) the user's profile.
 
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-Replace this paragraph with your own summary of what your version does.
+Authentication is handled without a standalone API key: the pipeline detects
+whether `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` is available, and falls
+back to the `claude` CLI subprocess (which carries Claude Code's OAuth session)
+when neither environment variable is set.
 
 ---
 
@@ -30,7 +32,9 @@ weighted scoring rule:
 - Energy proximity: 0–1 points (rewards closeness to target energy)
 - Acoustic bonus: 1 point (if user likes acoustic and song is acoustic)
 
-The ranking rule then sorts all scored songs and returns the top k results.
+The ranking rule sorts all scored songs and returns the top k results. A RAG
+pipeline then passes the catalog and scoring context to Claude, which produces
+a natural-language explanation grounded strictly in the catalog data.
 
 ### Features Used
 
@@ -40,10 +44,12 @@ valence, danceability, acousticness
 **UserProfile object:** favorite_genre, favorite_mood, target_energy,
 likes_acoustic
 
+---
+
 ## Algorithm Recipe
 
-| Feature | Points | Logic |
-|---------|--------|-------|
+| Feature | Points (genre-first) | Logic |
+|---------|----------------------|-------|
 | Genre match | +3 | Exact string match |
 | Mood match | +2 | Exact string match |
 | Energy proximity | 0–1 | `max(0, 1 - abs(song.energy - target))` |
@@ -51,104 +57,297 @@ likes_acoustic
 
 **Max possible score: 7.0**
 
+### Scoring Modes
+
+The system supports three weight presets selectable at runtime:
+
+| Mode | Genre | Mood | Energy | Acoustic |
+|------|-------|------|--------|----------|
+| `genre-first` | 3.0 | 2.0 | 1.0 | 1.0 |
+| `mood-first` | 1.5 | 4.0 | 1.0 | 1.0 |
+| `energy-focus` | 1.0 | 1.0 | 3.0 | 1.0 |
+
+---
+
 ## Data Flow
 
 ```mermaid
 flowchart TD
-    A[User Profile\ngenre · mood · energy · likes_acoustic] --> C[For each song: score_song]
+    A[User Profile\ngenre · mood · energy · likes_acoustic] --> C[score_song × 18 songs]
     B[songs.csv\n18 songs] --> C
-    C --> D[Genre match? +3 pts]
-    D --> E[Mood match? +2 pts]
-    E --> F[Energy proximity 0–1 pts]
+    C --> D[Genre match? +weight pts]
+    D --> E[Mood match? +weight pts]
+    E --> F[Energy proximity 0–weight pts]
     F --> G[Acoustic bonus? +1 pt]
     G --> H[Song Score]
     H --> I{More songs?}
     I -- Yes --> C
-    I -- No --> J[Sort all scores descending]
-    J --> K[Return top k results\nwith explanations]
+    I -- No --> J[Sort scores descending]
+    J --> K[Top-k Results with rule-based explanation]
+
+    B --> L[load_songs_as_context\nformat catalog as text]
+    K --> M[Build RAG query\nresults + user profile]
+    L --> N[System prompt\nwith catalog as context]
+    M --> N
+    N --> O{ANTHROPIC_API_KEY\nor ANTHROPIC_AUTH_TOKEN set?}
+    O -- Yes --> P[Anthropic SDK\nclaude-opus-4-7]
+    O -- No --> Q[claude CLI subprocess\nOAuth via Claude Code\ncwd=/tmp guardrail]
+    P --> R[Claude natural-language\nexplanation]
+    Q --> R
+    R --> S[Terminal Output\nscores + explanation]
+
+    style N fill:#f9f,stroke:#333
+    style R fill:#bbf,stroke:#333
 ```
+
+**Guardrail:** the system prompt instructs Claude to answer using only the songs
+listed in the catalog and never to invent titles. Running the CLI from `/tmp`
+prevents CLAUDE.md discovery, which would otherwise trigger tool calls that
+exhaust the turn budget before a response is generated.
+
+---
 
 ## Sample Terminal Output
 
-Six profiles were tested, including three adversarial edge cases designed to expose scoring weaknesses.
+### Adversarial: Genre Trap — metal + happy + medium energy
 
-### High-Energy Pop
-`genre=pop, mood=happy, energy=0.8, likes_acoustic=False`
-```
-=== High-Energy Pop ===
-Sunrise City - Score: 5.98
-  Because: Matches your favorite genre (pop) | Matches your preferred mood (happy) | Energy match: 0.98/1.00 (song=0.82, target=0.80)
-Gym Hero - Score: 3.87
-  Because: Matches your favorite genre (pop) | Energy match: 0.87/1.00 (song=0.93, target=0.80)
-Superstition Groove - Score: 2.98
-  Because: Matches your preferred mood (happy) | Energy match: 0.98/1.00 (song=0.78, target=0.80)
-```
+This profile exposes a catalog gap: only one metal song exists (Neon Rage) and
+it has intense mood and energy 0.96, so no single song can satisfy all three
+criteria simultaneously.
 
-### Chill Lofi
-`genre=lofi, mood=chill, energy=0.4, likes_acoustic=True`
 ```
-=== Chill Lofi ===
-Midnight Coding - Score: 6.98
-  Because: Matches your favorite genre (lofi) | Matches your preferred mood (chill) | Energy match: 0.98/1.00 (song=0.42, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.71)
-Library Rain - Score: 6.95
-  Because: Matches your favorite genre (lofi) | Matches your preferred mood (chill) | Energy match: 0.95/1.00 (song=0.35, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.86)
-Focus Flow - Score: 5.00
-  Because: Matches your favorite genre (lofi) | Energy match: 1.00/1.00 (song=0.40, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.78)
-```
-
-### Deep Intense Rock
-`genre=rock, mood=intense, energy=0.9, likes_acoustic=False`
-```
-=== Deep Intense Rock ===
-Storm Runner - Score: 5.99
-  Because: Matches your favorite genre (rock) | Matches your preferred mood (intense) | Energy match: 0.99/1.00 (song=0.91, target=0.90)
-Gym Hero - Score: 2.97
-  Because: Matches your preferred mood (intense) | Energy match: 0.97/1.00 (song=0.93, target=0.90)
-Neon Rage - Score: 2.94
-  Because: Matches your preferred mood (intense) | Energy match: 0.94/1.00 (song=0.96, target=0.90)
-```
-
-### Genre Trap — metal+happy (adversarial)
-`genre=metal, mood=happy, energy=0.5`
-```
-=== Genre Trap (metal+happy) ===
+==================================================
+  Mode: GENRE-FIRST  |  Profile: metal + happy + energy 0.5
+==================================================
 Neon Rage - Score: 3.54
-  Because: Matches your favorite genre (metal) | Energy match: 0.54/1.00 (song=0.96, target=0.50)
+  Because: Matches your favorite genre (metal) | Energy match: 0.54/1.0 (song=0.96, target=0.50)
 Rooftop Lights - Score: 2.74
-  Because: Matches your preferred mood (happy) | Energy match: 0.74/1.00 (song=0.76, target=0.50)
+  Because: Matches your preferred mood (happy) | Energy match: 0.74/1.0 (song=0.76, target=0.50)
 Superstition Groove - Score: 2.72
-  Because: Matches your preferred mood (happy) | Energy match: 0.72/1.00 (song=0.78, target=0.50)
+  Because: Matches your preferred mood (happy) | Energy match: 0.72/1.0 (song=0.78, target=0.50)
+
+==================================================
+  Mode: MOOD-FIRST  |  Profile: metal + happy + energy 0.5
+==================================================
+Rooftop Lights - Score: 4.74
+  Because: Matches your preferred mood (happy) | Energy match: 0.74/1.0 (song=0.76, target=0.50)
+Superstition Groove - Score: 4.72
+  Because: Matches your preferred mood (happy) | Energy match: 0.72/1.0 (song=0.78, target=0.50)
+Sunrise City - Score: 4.68
+  Because: Matches your preferred mood (happy) | Energy match: 0.68/1.0 (song=0.82, target=0.50)
+
+==================================================
+  Mode: ENERGY-FOCUS  |  Profile: metal + happy + energy 0.5
+==================================================
+Rooftop Lights - Score: 3.22
+  Because: Matches your preferred mood (happy) | Energy match: 2.22/3.0 (song=0.76, target=0.50)
+Superstition Groove - Score: 3.16
+  Because: Matches your preferred mood (happy) | Energy match: 2.16/3.0 (song=0.78, target=0.50)
+Sunrise City - Score: 3.04
+  Because: Matches your preferred mood (happy) | Energy match: 2.04/3.0 (song=0.82, target=0.50)
+
+==================================================
+  Claude AI Explanation
+==================================================
+Neon Rage is the only true genre match — it's the sole metal track in the
+catalog — but it's a poor fit on every other dimension: its energy (0.96) is
+nearly double the target, its mood is intense rather than happy, and its
+valence (0.30) is the lowest of the four. Rooftop Lights, Superstition Groove,
+and Sunrise City nail the happy mood with high valence scores (0.81–0.85), but
+share no genre overlap with metal. The most striking pattern is that none of
+the four songs hit medium energy — even the closest, Rooftop Lights at 0.76,
+runs well above the 0.5 target, because the catalog's happy-mood tracks skew
+high-energy by nature. The system split its strategy: one song for genre
+loyalty, three for mood compatibility, with energy accuracy sacrificed across
+the board.
 ```
 
-### Acoustic Paradox (adversarial)
-`genre=classical, mood=melancholic, energy=0.2, likes_acoustic=True`
+---
+
+### Best Case: Chill Lofi + Acoustic
+
+When the catalog has strong coverage of the profile, all three signals align
+and the recommender performs well.
+
 ```
-=== Acoustic Paradox ===
+==================================================
+  Mode: GENRE-FIRST  |  Profile: lofi + chill + energy 0.4 + acoustic
+==================================================
+Midnight Coding - Score: 6.98
+  Because: Matches your favorite genre (lofi) | Matches your preferred mood (chill) | Energy match: 0.98/1.0 (song=0.42, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.71)
+Library Rain - Score: 6.95
+  Because: Matches your favorite genre (lofi) | Matches your preferred mood (chill) | Energy match: 0.95/1.0 (song=0.35, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.86)
+Focus Flow - Score: 5.00
+  Because: Matches your favorite genre (lofi) | Energy match: 1.00/1.0 (song=0.40, target=0.40) | Has the acoustic feel you enjoy (acousticness=0.78)
+
+==================================================
+  Claude AI Explanation
+==================================================
+All three recommendations are strong fits for a lofi + chill + low-energy
+listener who values acoustic texture. Midnight Coding and Library Rain both
+match genre, mood, and acoustic character simultaneously, with energy values
+within 0.05 of the target — about as close as content-based filtering can
+get. Focus Flow sacrifices the mood match (focused rather than chill) but
+compensates with a perfect energy score (0.40 = target) and a high
+acousticness of 0.78. The catalog has genuine depth in the lofi space,
+which is why this profile produces tight, high-confidence recommendations
+while the metal+happy profile does not.
+```
+
+---
+
+### Adversarial: Acoustic Paradox — classical + melancholic + low energy
+
+One song (Sonata No. 3) matches every criterion perfectly, but 2nd and 3rd
+place fall back on acoustic proximity alone, revealing a depth gap outside
+the top result.
+
+```
+==================================================
+  Mode: GENRE-FIRST  |  Profile: classical + melancholic + energy 0.2 + acoustic
+==================================================
 Sonata No. 3 - Score: 6.98
-  Because: Matches your favorite genre (classical) | Matches your preferred mood (melancholic) | Energy match: 0.98/1.00 (song=0.22, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.97)
+  Because: Matches your favorite genre (classical) | Matches your preferred mood (melancholic) | Energy match: 0.98/1.0 (song=0.22, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.97)
 Spacewalk Thoughts - Score: 1.92
-  Because: Energy match: 0.92/1.00 (song=0.28, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.92)
+  Because: Energy match: 0.92/1.0 (song=0.28, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.92)
 Rainy Porch - Score: 1.87
-  Because: Energy match: 0.87/1.00 (song=0.33, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.88)
+  Because: Energy match: 0.87/1.0 (song=0.33, target=0.20) | Has the acoustic feel you enjoy (acousticness=0.88)
+
+==================================================
+  Claude AI Explanation
+==================================================
+Sonata No. 3 is an almost perfect match — it is the only classical track in
+the catalog, hits the melancholic mood, sits at 0.22 energy (very close to
+the 0.20 target), and has the highest acousticness in the entire catalog
+(0.97). The drop-off to 2nd place is dramatic: Spacewalk Thoughts and Rainy
+Porch score under 2.0, earning their positions purely on acoustic proximity
+and low energy — they share no genre or mood with the user's profile. This
+reveals a catalog coverage problem: a user with niche taste gets one great
+recommendation and then essentially noise, because the scoring system has
+nothing else to compare against.
 ```
 
-### Energy Cliff — mellow pop (adversarial)
-`genre=pop, mood=happy, energy=0.5`
-```
-=== Energy Cliff (mellow pop) ===
-Sunrise City - Score: 5.68
-  Because: Matches your favorite genre (pop) | Matches your preferred mood (happy) | Energy match: 0.68/1.00 (song=0.82, target=0.50)
-Gym Hero - Score: 3.57
-  Because: Matches your favorite genre (pop) | Energy match: 0.57/1.00 (song=0.93, target=0.50)
-Rooftop Lights - Score: 2.74
-  Because: Matches your preferred mood (happy) | Energy match: 0.74/1.00 (song=0.76, target=0.50)
-```
+---
 
 ## Potential Biases
 
 This system may over-prioritize genre, causing songs with matching mood
 and energy but different genre to rank poorly. It also creates a filter
-bubble — a pop+happy user will only ever see pop+happy songs.
+bubble — a pop+happy user will only ever see pop+happy songs. The catalog
+reflects a particular taste toward electronic, indie, and lofi genres;
+underrepresented genres (classical, metal, country) produce weaker
+recommendations because there are simply fewer songs to score against.
+
+---
+
+## Experiments You Tried
+
+### Experiment 1: Three Scoring Modes on the Same Profile
+
+Running `genre=metal, mood=happy, energy=0.5` through all three modes
+showed how weight choices change the top result entirely:
+
+- **genre-first** ranks Neon Rage #1 (sole genre match, score 3.54) even
+  though it scores 0.54 out of 1.0 on energy and has intense — not happy —
+  mood. Genre loyalty dominates.
+- **mood-first** drops Neon Rage out of the top 3 entirely. Rooftop Lights
+  (indie pop, happy) rises to #1 at 4.74 because mood weight is 4.0 vs 1.5
+  for genre, making the mood signal twice as influential as genre.
+- **energy-focus** keeps the same top-3 as mood-first but compresses the
+  score spread, because the energy weight (3.0) now contributes up to 3
+  points per song rather than 1. All three songs still overshoot the 0.5
+  energy target, scoring 2.04–2.22 out of 3.0.
+
+**Takeaway:** the mode choice changes which failure you accept — you can
+have genre accuracy, mood accuracy, or energy accuracy, but not all three
+when the catalog has a gap.
+
+### Experiment 2: Adversarial Profile — Energy Cliff
+
+A `pop+happy+energy=0.5` profile (medium energy) showed that the catalog's
+pop and happy songs cluster between 0.76–0.93 energy. The top recommendation
+(Sunrise City, 5.68) matches genre and mood perfectly but sits at 0.82
+energy — 0.32 above the target. Lowering `target_energy` to 0.3 or 0.2
+would push the energy component to near-zero for all genre+mood matches,
+meaning a user who prefers soft, calm pop would get the same genre+mood songs
+regardless of their energy preference.
+
+### Experiment 3: Best-Case vs. Worst-Case Catalog Coverage
+
+Comparing lofi+chill (3 catalog entries, all good matches) to
+classical+melancholic (1 catalog entry, perfect match, then noise) confirmed
+that content-based filtering quality is entirely bounded by catalog depth.
+The system is not learning anything about taste — it is measuring how well
+the catalog was designed to cover the preference space.
+
+---
+
+## Limitations and Risks
+
+**Catalog depth determines result quality.** With 18 songs across 14 genres,
+most genre+mood combinations have zero or one match. A metal fan who likes
+happy music, or a jazz fan who prefers energetic songs, gets recommendations
+that satisfy at most one of their stated criteria.
+
+**Happy-mood songs skew high-energy.** In this catalog, every happy-mood
+song has energy above 0.76. A user who wants happy but low-energy music (0.3)
+will receive songs that are accurate on mood but significantly off on energy,
+with no way to differentiate within that cluster.
+
+**Genre weighting creates a loyalty trap.** In genre-first mode, a 3-point
+genre match can outrank a song with perfect mood and energy simply because
+the genre string differs. Neon Rage (metal, intense, energy 0.96) consistently
+beats cross-genre alternatives for a metal user, even when those alternatives
+are objectively closer on every other dimension.
+
+**Score collapse in niche profiles.** The classical+melancholic profile
+produces a #1 score of 6.98 and a #2 score of 1.92 — a gap of 5 points.
+When shown a ranked list of three, a user would reasonably assume all three
+are reasonable recommendations. The score gap is not surfaced in the output.
+
+**The RAG layer cannot fix a scoring failure.** Claude's explanation correctly
+identified the mismatch in the metal+happy profile, but that insight does not
+feed back into the ranking. The pipeline is explain-only; it has no mechanism
+to re-rank or surface better alternatives that the scoring function missed.
+
+**No collaborative signal.** Because the system uses only content-based
+filtering, two users with identical stated preferences always get identical
+recommendations. There is no mechanism to learn from what users actually
+listened to or skipped.
+
+---
+
+## Reflection
+
+Building the RAG layer on top of the scoring engine clarified something that
+is easy to miss when working only with numbers: a score is not the same as a
+reason. The scoring function produces a ranked list, and the rule-based
+explanation captures which weights fired, but it takes Claude's natural-language
+synthesis to surface the structural problem — that a user's taste profile
+contains contradictions the catalog cannot simultaneously satisfy. Watching
+Claude observe, unprompted, that the metal+happy profile "split its strategy"
+between genre loyalty and mood compatibility made the scoring design's
+trade-offs concrete in a way the numeric output alone did not.
+
+The authentication challenge was instructive for a different reason. The
+assumption that `ANTHROPIC_API_KEY` would simply be present turned out to be
+wrong: Claude Code authenticates via an OAuth token passed through a
+close-on-exec file descriptor, which child processes never inherit. Debugging
+this required understanding not just the API but the process model of the
+environment the code was running in. The solution — detecting available
+credentials in order (API key → auth token → CLI subprocess) and running the
+CLI from `/tmp` to prevent CLAUDE.md discovery — is a real-world example of
+building resilient auth into a pipeline, not just adding a try/except around
+a missing key.
+
+The broader lesson is that an AI explanation layer amplifies whatever the
+underlying data allows. When the catalog has genuine depth (lofi, pop), Claude
+produces tight, confident explanations that would be useful to a real user.
+When the catalog has gaps (metal, classical), Claude correctly identifies the
+failure mode — but the system still shows three results, implying a confidence
+the scores do not warrant. Human judgment is still required to decide when a
+recommender's output should be shown at all, versus suppressed because the
+catalog simply cannot serve the user's taste.
 
 ---
 
@@ -162,171 +361,33 @@ bubble — a pop+happy user will only ever see pop+happy songs.
    python -m venv .venv
    source .venv/bin/activate      # Mac or Linux
    .venv\Scripts\activate         # Windows
+   ```
 
-2. Install dependencies
+2. Install dependencies:
 
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. Run the app:
 
-```bash
-python -m src.main
-```
+   ```bash
+   python -m src.main
+   ```
+
+   The recommender runs the demo profile through all three scoring modes and
+   prints a Claude-generated explanation at the end. Authentication is automatic:
+   set `ANTHROPIC_API_KEY` for direct SDK access, or run inside a Claude Code
+   session to use the CLI fallback.
 
 ### Running Tests
 
-Run the starter tests with:
-
 ```bash
-pytest
+pytest tests/ -v
 ```
 
-You can add more tests in `tests/test_recommender.py`.
-
 ---
 
-## Experiments You Tried
-
-Use this section to document the experiments you ran. For example:
-
-- What happened when you changed the weight on genre from 2.0 to 0.5
-- What happened when you added tempo or valence to the score
-- How did your system behave for different types of users
-
----
-
-## Limitations and Risks
-
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
-
----
-
-## Reflection
-
-Read and complete `model_card.md`:
+## Model Card
 
 [**Model Card**](model_card.md)
-
-Write 1 to 2 paragraphs here about what you learned:
-
-- about how recommenders turn data into predictions
-- about where bias or unfairness could show up in systems like this
-
-
----
-
-## 7. `model_card_template.md`
-
-Combines reflection and model card framing from the Module 3 guidance. :contentReference[oaicite:2]{index=2}  
-
-```markdown
-# 🎧 Model Card - Music Recommender Simulation
-
-## 1. Model Name
-
-Give your recommender a name, for example:
-
-> VibeFinder 1.0
-
----
-
-## 2. Intended Use
-
-- What is this system trying to do
-- Who is it for
-
-Example:
-
-> This model suggests 3 to 5 songs from a small catalog based on a user's preferred genre, mood, and energy level. It is for classroom exploration only, not for real users.
-
----
-
-## 3. How It Works (Short Explanation)
-
-Describe your scoring logic in plain language.
-
-- What features of each song does it consider
-- What information about the user does it use
-- How does it turn those into a number
-
-Try to avoid code in this section, treat it like an explanation to a non programmer.
-
----
-
-## 4. Data
-
-Describe your dataset.
-
-- How many songs are in `data/songs.csv`
-- Did you add or remove any songs
-- What kinds of genres or moods are represented
-- Whose taste does this data mostly reflect
-
----
-
-## 5. Strengths
-
-Where does your recommender work well
-
-You can think about:
-- Situations where the top results "felt right"
-- Particular user profiles it served well
-- Simplicity or transparency benefits
-
----
-
-## 6. Limitations and Bias
-
-Where does your recommender struggle
-
-Some prompts:
-- Does it ignore some genres or moods
-- Does it treat all users as if they have the same taste shape
-- Is it biased toward high energy or one genre by default
-- How could this be unfair if used in a real product
-
----
-
-## 7. Evaluation
-
-How did you check your system
-
-Examples:
-- You tried multiple user profiles and wrote down whether the results matched your expectations
-- You compared your simulation to what a real app like Spotify or YouTube tends to recommend
-- You wrote tests for your scoring logic
-
-You do not need a numeric metric, but if you used one, explain what it measures.
-
----
-
-## 8. Future Work
-
-If you had more time, how would you improve this recommender
-
-Examples:
-
-- Add support for multiple users and "group vibe" recommendations
-- Balance diversity of songs instead of always picking the closest match
-- Use more features, like tempo ranges or lyric themes
-
----
-
-## 9. Personal Reflection
-
-A few sentences about what you learned:
-
-- What surprised you about how your system behaved
-- How did building this change how you think about real music recommenders
-- Where do you think human judgment still matters, even if the model seems "smart"
-
