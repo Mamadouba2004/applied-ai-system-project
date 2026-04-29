@@ -349,6 +349,20 @@ the scores do not warrant. Human judgment is still required to decide when a
 recommender's output should be shown at all, versus suppressed because the
 catalog simply cannot serve the user's taste.
 
+Bias and unfairness can enter a recommender at every layer. At the data layer,
+this catalog over-represents certain genres (lofi, pop, electronic) and
+under-represents others (metal, classical, country), meaning the system
+provides a materially worse experience for users with minority taste profiles —
+not through any intentional decision but simply through what songs were added.
+At the algorithm layer, the binary genre-match rule treats all genre mismatches
+as equally bad: "indie pop" and "metal" are both distance-zero from "pop," even
+though a human listener would hear one as close and the other as completely
+different. At the output layer, showing three results with uniform visual weight
+implies equal confidence regardless of the actual score gap, which misleads
+users into trusting weak recommendations. Each of these is a choice that
+benefits some users and harms others — which is what makes them fairness
+concerns, not just accuracy concerns.
+
 ---
 
 ## Guardrails in Action
