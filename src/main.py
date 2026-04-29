@@ -10,7 +10,7 @@ You will implement the functions in recommender.py:
 """
 
 import os
-from recommender import load_songs, recommend_songs
+from src.recommender import load_songs, recommend_songs
 
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "songs.csv")
 
