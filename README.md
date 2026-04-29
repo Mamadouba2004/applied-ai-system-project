@@ -410,6 +410,54 @@ as soon as any one candidate title appears in the response.
 
 ---
 
+## Demo Walkthrough
+
+🎥 **[Watch the demo on Loom](YOUR_LINK_HERE)**
+
+The video walks through a full end-to-end run of `python3 -m src.main` and
+covers each stage of the pipeline:
+
+**0:00 – 0:30 · Project overview**
+Quick tour of the repo structure: `src/recommender.py` (scoring engine),
+`src/rag.py` (RAG pipeline), `src/retriever.py` (knowledge base),
+`src/guardrails.py` (output validation), and `data/songs.csv` (18-song
+catalog).
+
+**0:30 – 1:15 · Genre-first scoring mode**
+The terminal shows the `metal + happy + energy 0.5` profile run through
+`genre-first` weights (genre=3, mood=2, energy=1). Neon Rage tops the list
+with a score of 3.54 — the genre match wins even though its mood is
+`intense` and its energy (0.96) nearly doubles the target. The video
+highlights why this is the genre-loyalty trap.
+
+**1:15 – 2:00 · Mood-first and energy-focus modes**
+Switching to `mood-first` (mood=4, genre=1.5) drops Neon Rage out of the
+top 3 entirely; Rooftop Lights rises to #1 at 4.74 on mood accuracy alone.
+The `energy-focus` mode (energy=3) keeps the same top-3 but stretches the
+score scale, making the energy gap more visible in the numbers.
+
+**2:00 – 2:45 · Claude AI Explanation**
+The RAG pipeline fires: `load_songs_as_context` formats all 18 songs as
+structured text, `retrieve_context("metal", "happy")` pulls genre and mood
+descriptions from the knowledge base, and the combined system prompt is
+sent to Claude. The video shows the model's response arriving in the
+terminal — cross-result synthesis that the rule-based output cannot produce,
+identifying that the recommender split its strategy between genre loyalty
+and mood compatibility.
+
+**2:45 – 3:15 · Guardrails**
+A brief demo of `src/guardrails.py` catching a too-short response and a
+response that contains no song titles, showing the exact `ValueError`
+messages raised in each case.
+
+**3:15 – 3:30 · Eval harness**
+`python3 tests/eval_harness.py` runs the three predefined profiles
+(High-Energy Pop, Genre Trap, Chill Lofi + Acoustic), prints the per-check
+PASS/FAIL results, and closes with the overall confidence score: 12/12,
+100%.
+
+---
+
 ## Getting Started
 
 ### Setup
