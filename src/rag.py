@@ -1,28 +1,49 @@
 """RAG pipeline for the music recommender using Claude."""
 import csv
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
 import anthropic
 
 
-def get_anthropic_client() -> anthropic.Anthropic:
-    """Create an Anthropic client using Claude Code's OAuth token when no API key is set."""
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return anthropic.Anthropic()
+def _get_anthropic_client() -> Optional[anthropic.Anthropic]:
+    """Return an Anthropic SDK client when API credentials are available."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        return anthropic.Anthropic(api_key=api_key)
 
-    # Claude Code exposes its OAuth token via a numbered file descriptor.
-    # This allows subprocesses to call the Anthropic API without a separate key.
-    token_fd_str = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR")
-    if token_fd_str:
-        raw = os.read(int(token_fd_str), 8192).decode().strip()
-        return anthropic.Anthropic(auth_token=raw)
+    auth_token = os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    if auth_token:
+        return anthropic.Anthropic(auth_token=auth_token)
 
-    raise RuntimeError(
-        "No Anthropic authentication found. "
-        "Set ANTHROPIC_API_KEY or run inside a Claude Code session."
+    # CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR carries the OAuth token, but the
+    # FD is close-on-exec so child processes can't read it. Fall back to None
+    # and let callers use the CLI path instead.
+    return None
+
+
+def _query_via_cli(question: str, system: str) -> str:
+    """Use the `claude` CLI (already authenticated via Claude Code) to answer."""
+    # Run from /tmp so claude doesn't discover the project's CLAUDE.md and
+    # trigger tool calls that would exhaust --max-turns before the model responds.
+    result = subprocess.run(
+        [
+            "claude", "--print",
+            "--output-format", "text",
+            "--max-turns", "1",
+            "--system-prompt", system,
+        ],
+        input=question,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd="/tmp",
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"claude CLI failed: {result.stderr.strip()}")
+    return result.stdout.strip()
 
 
 def load_songs_as_context(csv_path: str) -> str:
@@ -45,20 +66,25 @@ def query_rag(question: str, csv_path: Optional[str] = None) -> str:
         csv_path = str(Path(__file__).parent.parent / "data" / "songs.csv")
 
     context = load_songs_as_context(csv_path)
-    client = get_anthropic_client()
-
-    message = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=1024,
-        system=(
-            "You are a music recommender assistant. "
-            "Use only the song catalog below to answer questions. "
-            "Do not invent songs that are not listed.\n\n"
-            f"Song catalog:\n{context}"
-        ),
-        messages=[{"role": "user", "content": question}],
+    system = (
+        "You are a music recommender assistant. "
+        "Use only the song catalog below to answer questions. "
+        "Do not invent songs that are not listed.\n\n"
+        f"Song catalog:\n{context}"
     )
-    return message.content[0].text
+
+    client = _get_anthropic_client()
+    if client is not None:
+        message = client.messages.create(
+            model="claude-opus-4-7",
+            max_tokens=1024,
+            system=system,
+            messages=[{"role": "user", "content": question}],
+        )
+        return message.content[0].text
+
+    # No SDK credentials available — use the authenticated claude CLI instead
+    return _query_via_cli(question, system)
 
 
 if __name__ == "__main__":
