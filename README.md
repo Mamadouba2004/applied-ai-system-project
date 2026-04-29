@@ -351,6 +351,65 @@ catalog simply cannot serve the user's taste.
 
 ---
 
+## Guardrails in Action
+
+Every response from the Claude RAG layer is passed through `src/guardrails.py`
+before it reaches the caller. `validate(text, candidates)` runs four checks in
+order and raises `ValueError` on the first failure. Below are three concrete
+examples showing exactly what each error looks like.
+
+### Example 1 — Empty response
+
+```python
+from src.guardrails import validate
+
+validate("", candidates=[])
+# ValueError: Guardrail failed: response is empty.
+```
+
+**When this fires:** if the Claude API returns an empty string or the CLI
+subprocess produces no output (e.g. a network timeout that is caught upstream
+and coerced to an empty string before being passed to `validate`).
+
+---
+
+### Example 2 — Response too short
+
+```python
+from src.guardrails import validate
+
+validate("OK", candidates=[])
+# ValueError: Guardrail failed: response too short (2 chars, minimum 40).
+```
+
+**When this fires:** any response under 40 characters. A one-word or
+one-sentence stub is not a useful explanation; this check catches cases where
+the model acknowledges the prompt but does not actually answer it (e.g. "Sure,
+I can help with that.").
+
+---
+
+### Example 3 — No song title mentioned
+
+```python
+from src.guardrails import validate
+
+validate(
+    "This is a long enough response with no song titles mentioned at all anywhere in the text here.",
+    candidates=[{"title": "Midnight Coding", "score": 6.98}],
+)
+# ValueError: Guardrail failed: response does not mention any recommended song
+# title. Expected at least one of: ['Midnight Coding'].
+```
+
+**When this fires:** the response is long enough but never references any of
+the candidate song titles. This catches hallucinated explanations — responses
+that discuss music in general terms without engaging with the specific songs
+the scoring engine actually returned. The check is case-insensitive and passes
+as soon as any one candidate title appears in the response.
+
+---
+
 ## Getting Started
 
 ### Setup
