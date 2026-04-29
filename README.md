@@ -512,3 +512,15 @@ pytest tests/ -v
 ## Model Card
 
 [**Model Card**](model_card.md)
+
+---
+
+## Portfolio Reflection
+
+This project demonstrates my ability to extend a working system into a
+production-ready AI pipeline. I designed a RAG architecture from scratch,
+debugged OAuth authentication at the subprocess level, implemented output
+guardrails, and built an evaluation harness — all while maintaining clean
+modular code and documented tradeoffs. I approach AI engineering the way I
+approach any complex system: understand the failure modes first, then build
+the reliability layer.
