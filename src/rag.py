@@ -3,9 +3,12 @@ import csv
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import List, Dict, Optional
 
 import anthropic
+
+from src.retriever import retrieve_context
+from src.guardrails import validate
 
 
 def _get_anthropic_client() -> Optional[anthropic.Anthropic]:
@@ -60,17 +63,33 @@ def load_songs_as_context(csv_path: str) -> str:
     return "\n".join(lines)
 
 
-def query_rag(question: str, csv_path: Optional[str] = None) -> str:
-    """Answer a natural-language question about the music catalog using Claude."""
+def query_rag(
+    question: str,
+    csv_path: Optional[str] = None,
+    genre: str = "",
+    mood: str = "",
+    candidates: Optional[List[Dict]] = None,
+) -> str:
+    """Answer a natural-language question about the music catalog using Claude.
+
+    Uses retrieve_context() to enrich the system prompt with genre/mood
+    knowledge, then validates the response with guardrails.validate().
+    """
     if csv_path is None:
         csv_path = str(Path(__file__).parent.parent / "data" / "songs.csv")
 
-    context = load_songs_as_context(csv_path)
+    catalog_context = load_songs_as_context(csv_path)
+
+    # Enrich system prompt with retrieved genre/mood knowledge when available
+    kb_context = retrieve_context(genre, mood) if genre or mood else ""
+    context_block = f"{kb_context}\n\n" if kb_context else ""
+
     system = (
         "You are a music recommender assistant. "
         "Use only the song catalog below to answer questions. "
         "Do not invent songs that are not listed.\n\n"
-        f"Song catalog:\n{context}"
+        f"{context_block}"
+        f"Song catalog:\n{catalog_context}"
     )
 
     client = _get_anthropic_client()
@@ -81,12 +100,18 @@ def query_rag(question: str, csv_path: Optional[str] = None) -> str:
             system=system,
             messages=[{"role": "user", "content": question}],
         )
-        return message.content[0].text
+        response = message.content[0].text
+    else:
+        # No SDK credentials available — use the authenticated claude CLI instead
+        response = _query_via_cli(question, system)
 
-    # No SDK credentials available — use the authenticated claude CLI instead
-    return _query_via_cli(question, system)
+    return validate(response, candidates or [])
 
 
 if __name__ == "__main__":
-    answer = query_rag("Which songs are best for studying or focusing?")
+    answer = query_rag(
+        "Which songs are best for studying or focusing?",
+        genre="lofi",
+        mood="focused",
+    )
     print(answer)

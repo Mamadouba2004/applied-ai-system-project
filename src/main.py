@@ -42,7 +42,17 @@ def main() -> None:
         f"In 3-4 sentences, explain why these songs fit (or don't fit) this profile "
         f"and highlight any interesting patterns."
     )
-    print(query_rag(question))
+    # Build a minimal candidates list for guardrail score validation
+    all_results = []
+    for mode in ["genre-first", "mood-first", "energy-focus"]:
+        for song, score, _ in recommend_songs(demo_profile, songs, k=3, mode=mode):
+            all_results.append({"title": song["title"], "score": score})
+    print(query_rag(
+        question,
+        genre=demo_profile["genre"],
+        mood=demo_profile["mood"],
+        candidates=all_results,
+    ))
 
 
 if __name__ == "__main__":
