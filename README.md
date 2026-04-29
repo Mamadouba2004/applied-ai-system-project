@@ -426,7 +426,7 @@ as soon as any one candidate title appears in the response.
 
 ## Demo Walkthrough
 
-🎥 **[Watch the demo on Loom](YOUR_LINK_HERE)**
+🎥 **[Watch the demo on Loom](https://www.loom.com/share/139e4692ca314be5a6fddebc45c6bead)**
 
 The video walks through a full end-to-end run of `python3 -m src.main` and
 covers each stage of the pipeline:
