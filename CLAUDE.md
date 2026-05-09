@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 ```bash
 # Run the recommender CLI
-cd src && python main.py
+python -m src.main
 
 # Run all tests
 pytest tests/
@@ -41,8 +41,8 @@ The functional API is entry-pointed from `src/main.py` (uses dict-based `user_pr
 
 ## Data
 
-`data/songs.csv` has 10 songs with these numeric features (all 0.0–1.0 except tempo_bpm): `energy`, `valence`, `danceability`, `acousticness`, and `tempo_bpm` (72–152 BPM). Categorical features: `genre` (pop, lofi, rock, ambient, jazz, synthwave, indie pop) and `mood` (happy, chill, intense, relaxed, focused, moody).
+`data/songs.csv` has 18 songs with these numeric features (all 0.0–1.0 except tempo_bpm): `energy`, `valence`, `danceability`, `acousticness`, and `tempo_bpm` (72–152 BPM). Categorical features: `genre` (pop, lofi, rock, ambient, jazz, synthwave, indie pop, country, hip-hop, classical, rnb, metal, funk, electronic) and `mood` (happy, chill, intense, relaxed, focused, moody, nostalgic, energetic, melancholic, romantic).
 
 ## Scoring Design
 
-The recommender uses **content-based filtering** — matching song attributes to a user taste profile. The intended scoring approach rewards proximity for numeric features (e.g., energy close to `target_energy` scores higher than just high/low energy) and exact-match bonuses for categorical features (genre, mood). Weights should reflect that genre/mood matches matter more than a small BPM difference.
+The recommender uses **content-based filtering** — matching song attributes to a user taste profile. The intended scoring approach rewards proximity for numeric features (e.g., energy close to `target_energy` scores higher than just high/low energy) and exact-match bonuses for categorical features (genre, mood). Weights should reflect that genre/mood matches matter more than numeric feature differences.

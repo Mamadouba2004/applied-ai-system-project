@@ -22,6 +22,7 @@ def main() -> None:
     demo_profile = {"genre": "metal", "mood": "happy", "energy": 0.5}
 
     all_titles: list[str] = []
+    all_results: list[dict] = []
     for mode in ["genre-first", "mood-first", "energy-focus"]:
         print(f"\n{'='*50}")
         print(f"  Mode: {mode.upper()}  |  Profile: metal + happy + energy 0.5")
@@ -30,6 +31,7 @@ def main() -> None:
             print(f"{song['title']} - Score: {score:.2f}")
             print(f"  Because: {explanation}")
             all_titles.append(song["title"])
+            all_results.append({"title": song["title"], "score": score})
 
     unique_titles = list(dict.fromkeys(all_titles))
     print(f"\n{'='*50}")
@@ -42,11 +44,6 @@ def main() -> None:
         f"In 3-4 sentences, explain why these songs fit (or don't fit) this profile "
         f"and highlight any interesting patterns."
     )
-    # Build a minimal candidates list for guardrail score validation
-    all_results = []
-    for mode in ["genre-first", "mood-first", "energy-focus"]:
-        for song, score, _ in recommend_songs(demo_profile, songs, k=3, mode=mode):
-            all_results.append({"title": song["title"], "score": score})
     print(query_rag(
         question,
         genre=demo_profile["genre"],
