@@ -159,8 +159,8 @@ ul[data-testid="stSelectboxVirtualDropdown"] li:hover {{
     color: {t['accent']} !important;
     font-weight: 700 !important;
 }}
-/* ── primary button ── */
-.stButton > button {{
+/* ── form submit button ("Find my vibe") ── */
+[data-testid="stFormSubmitButton"] button {{
     width: 100% !important;
     background-color: {t['accent']} !important;
     color: #FFFFFF !important;
@@ -172,24 +172,31 @@ ul[data-testid="stSelectboxVirtualDropdown"] li:hover {{
     letter-spacing: 0.02em !important;
     transition: background 0.15s;
 }}
-.stButton > button:hover {{
+[data-testid="stFormSubmitButton"] button:hover {{
     background-color: #17a349 !important;
-    border: none !important;
 }}
-/* ── small toggle button (header) ── */
-.toggle-btn > button {{
-    width: auto !important;
+/* ── toggle button (header, regular st.button) ── */
+[data-testid="stButton"] button {{
     background-color: transparent !important;
     color: {t['muted']} !important;
     border: 1px solid {t['border']} !important;
     border-radius: 20px !important;
     font-weight: 400 !important;
     font-size: 0.8rem !important;
-    padding: 3px 12px !important;
+    padding: 4px 14px !important;
+    width: auto !important;
+    transition: all 0.15s;
 }}
-.toggle-btn > button:hover {{
+[data-testid="stButton"] button:hover {{
     background-color: {t['surface2']} !important;
     color: {t['text']} !important;
+}}
+/* ── form card ── */
+[data-testid="stForm"] {{
+    background-color: {t['surface']} !important;
+    border: 1px solid {t['border']} !important;
+    border-radius: 12px !important;
+    padding: 4px 8px 8px !important;
 }}
 /* ── spinner ── */
 [data-testid="stSpinner"] p {{
@@ -288,80 +295,40 @@ def main() -> None:
         )
     with hcol_r:
         st.markdown(
-            f'<div style="text-align:right; padding:10px 0 6px; '
+            f'<div style="text-align:right; padding:10px 0 2px; '
             f'font-size:0.78rem; color:{t["muted"]}; font-family:monospace;">'
             f'{mode_label} · {theme_label}</div>',
             unsafe_allow_html=True,
         )
-        st.markdown('<div class="toggle-btn">', unsafe_allow_html=True)
         if st.button(f"{toggle_icon} {'Light' if st.session_state.dark_mode else 'Dark'}", key="theme_toggle"):
             st.session_state.dark_mode = not st.session_state.dark_mode
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(f'<hr style="border-color:{t["border"]}; margin:0 0 1rem 0;">', unsafe_allow_html=True)
 
     # ── INPUT PANEL ───────────────────────────────────────────────────────────
-    st.markdown(
-        f'<div style="background:{t["surface"]}; border:1px solid {t["border"]}; '
-        f'border-radius:12px; padding:20px 24px 16px;">',
-        unsafe_allow_html=True,
-    )
+    with st.form("vibe_form"):
+        gc, mc = st.columns(2)
+        with gc:
+            genre = st.selectbox("Favorite Genre", GENRES, index=GENRES.index("lofi"))
+        with mc:
+            mood = st.selectbox("Favorite Mood", MOODS, index=MOODS.index("chill"))
 
-    gc, mc = st.columns(2)
-    with gc:
-        genre = st.selectbox("Favorite Genre", GENRES, index=GENRES.index("lofi"))
-    with mc:
-        mood  = st.selectbox("Favorite Mood",  MOODS,  index=MOODS.index("chill"))
+        energy = st.slider("Target Energy", min_value=0.0, max_value=1.0,
+                           value=0.40, step=0.01)
 
-    # Energy slider — show current value prominently above the track
-    st.markdown(
-        f'<div style="font-size:0.7rem; color:{t["muted"]}; '
-        f'letter-spacing:0.1em; text-transform:uppercase; font-weight:500; '
-        f'margin-top:8px;">Target Energy</div>',
-        unsafe_allow_html=True,
-    )
-    # Initialise key before reading it in the label below
-    if "energy_slider" not in st.session_state:
-        st.session_state["energy_slider"] = 0.40
+        likes_acoustic = st.checkbox("Likes acoustic music", value=True)
 
-    ev = st.session_state["energy_slider"]
-    ecol_l, ecol_c, ecol_r = st.columns([1, 2, 1])
-    with ecol_c:
-        st.markdown(
-            f'<div style="text-align:center; font-size:1.6rem; font-weight:800; '
-            f'color:{t["accent"]}; line-height:1.2; margin-bottom:-4px;">{ev:.2f}</div>',
-            unsafe_allow_html=True,
+        mode = st.radio(
+            "Scoring Mode",
+            options=["genre-first", "mood-first", "energy-focus"],
+            index=0,
+            horizontal=True,
         )
 
-    energy = st.slider(
-        "Target Energy",
-        min_value=0.0, max_value=1.0,
-        value=st.session_state["energy_slider"],
-        step=0.01,
-        key="energy_slider",
-        label_visibility="collapsed",
-    )
-
-    likes_acoustic = st.checkbox("Likes acoustic music", value=True)
-
-    st.markdown(
-        f'<div style="font-size:0.7rem; color:{t["muted"]}; letter-spacing:0.1em; '
-        f'text-transform:uppercase; font-weight:500; margin-top:12px; '
-        f'margin-bottom:4px;">Scoring Mode</div>',
-        unsafe_allow_html=True,
-    )
-    mode = st.radio(
-        "Scoring Mode",
-        options=["genre-first", "mood-first", "energy-focus"],
-        index=0,
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    find_clicked = st.button("Find my vibe", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)  # close input panel
+        find_clicked = st.form_submit_button(
+            "Find my vibe", use_container_width=True
+        )
 
     # ── RUN RECOMMENDER ───────────────────────────────────────────────────────
     if find_clicked:
