@@ -2,3 +2,4 @@ anthropic>=0.40.0
 pandas
 pytest
 streamlit
+python-dotenv

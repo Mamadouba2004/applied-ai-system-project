@@ -7,6 +7,8 @@ from typing import List, Dict, Optional
 
 import anthropic
 
+DEFAULT_MODEL = os.environ.get("VIBEFINDER_MODEL", "claude-opus-4-7")
+
 from src.retriever import retrieve_context
 from src.guardrails import validate
 
@@ -95,7 +97,7 @@ def query_rag(
     client = _get_anthropic_client()
     if client is not None:
         message = client.messages.create(
-            model="claude-opus-4-7",
+            model=DEFAULT_MODEL,
             max_tokens=1024,
             system=system,
             messages=[{"role": "user", "content": question}],
