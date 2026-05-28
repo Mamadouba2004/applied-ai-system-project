@@ -163,38 +163,32 @@ ul[data-testid="stSelectboxVirtualDropdown"] li:hover {{
     color: {t['accent']} !important;
     font-weight: 700 !important;
 }}
-/* ── primary button ── */
-.stButton > button {{
+/* ── form container ── */
+[data-testid="stForm"] {{
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}}
+/* primary Find my vibe button */
+[data-testid="stFormSubmitButton"] > button {{
     width: 100% !important;
     background-color: {t['accent']} !important;
-    color: #FFFFFF !important;
+    color: white !important;
     border: none !important;
     border-radius: 8px !important;
-    font-weight: 700 !important;
+    padding: 12px !important;
     font-size: 1rem !important;
-    padding: 0.65rem 1rem !important;
-    letter-spacing: 0.02em !important;
-    transition: background 0.15s;
+    font-weight: 600 !important;
 }}
-.stButton > button:hover {{
-    background-color: #17a349 !important;
-    border: none !important;
-}}
-/* ── small toggle button (header) ── */
-.toggle-btn .stButton > button {{
+/* toggle button — small pill */
+[data-testid="stBaseButton-secondary"] {{
     width: auto !important;
     background-color: transparent !important;
     color: {t['muted']} !important;
     border: 1px solid {t['border']} !important;
     border-radius: 20px !important;
-    font-weight: 400 !important;
     font-size: 0.8rem !important;
     padding: 3px 12px !important;
-}}
-.toggle-btn .stButton > button:hover {{
-    background-color: {t['surface2']} !important;
-    color: {t['text']} !important;
-    border: 1px solid {t['border']} !important;
 }}
 /* ── spinner ── */
 [data-testid="stSpinner"] p {{
