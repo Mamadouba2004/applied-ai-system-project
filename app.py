@@ -69,7 +69,11 @@ def _inject_css(t: dict) -> None:
 }}
 [data-testid="stHeader"] {{
     background-color: {t['bg']} !important;
-    border-bottom: 1px solid {t['border']};
+    border-bottom: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
 }}
 .block-container {{
     padding-top: 0.75rem !important;
@@ -177,7 +181,7 @@ ul[data-testid="stSelectboxVirtualDropdown"] li:hover {{
     border: none !important;
 }}
 /* ── small toggle button (header) ── */
-.toggle-btn > button {{
+.toggle-btn .stButton > button {{
     width: auto !important;
     background-color: transparent !important;
     color: {t['muted']} !important;
@@ -187,9 +191,10 @@ ul[data-testid="stSelectboxVirtualDropdown"] li:hover {{
     font-size: 0.8rem !important;
     padding: 3px 12px !important;
 }}
-.toggle-btn > button:hover {{
+.toggle-btn .stButton > button:hover {{
     background-color: {t['surface2']} !important;
     color: {t['text']} !important;
+    border: 1px solid {t['border']} !important;
 }}
 /* ── spinner ── */
 [data-testid="stSpinner"] p {{
@@ -314,25 +319,9 @@ def main() -> None:
     with mc:
         mood  = st.selectbox("Favorite Mood",  MOODS,  index=MOODS.index("chill"))
 
-    # Energy slider — show current value prominently above the track
-    st.markdown(
-        f'<div style="font-size:0.7rem; color:{t["muted"]}; '
-        f'letter-spacing:0.1em; text-transform:uppercase; font-weight:500; '
-        f'margin-top:8px;">Target Energy</div>',
-        unsafe_allow_html=True,
-    )
-    # Initialise key before reading it in the label below
+    # Energy slider
     if "energy_slider" not in st.session_state:
         st.session_state["energy_slider"] = 0.40
-
-    ev = st.session_state["energy_slider"]
-    ecol_l, ecol_c, ecol_r = st.columns([1, 2, 1])
-    with ecol_c:
-        st.markdown(
-            f'<div style="text-align:center; font-size:1.6rem; font-weight:800; '
-            f'color:{t["accent"]}; line-height:1.2; margin-bottom:-4px;">{ev:.2f}</div>',
-            unsafe_allow_html=True,
-        )
 
     energy = st.slider(
         "Target Energy",
@@ -340,7 +329,6 @@ def main() -> None:
         value=st.session_state["energy_slider"],
         step=0.01,
         key="energy_slider",
-        label_visibility="collapsed",
     )
 
     likes_acoustic = st.checkbox("Likes acoustic music", value=True)
