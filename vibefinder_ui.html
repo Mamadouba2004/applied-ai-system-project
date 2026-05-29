@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeFinder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background-color: #0F0F0F; color: #F2F2F2; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+
+    /* FIX 3 — structural slider rules only; fill set inline in React */
+    input[type="range"] { -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; cursor:pointer; outline:none; width:100%; }
+    input[type="range"]::-webkit-slider-runnable-track { height:4px; border-radius:2px; }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance:none; width:17px; height:17px; border-radius:50%;
+      background:#FFFFFF; cursor:pointer; box-shadow:0 1px 5px rgba(0,0,0,0.55);
+      margin-top:-6px; transition:transform 0.12s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform:scale(1.18); }
+    input[type="range"]::-moz-range-thumb { width:17px; height:17px; border:none; border-radius:50%; background:#FFFFFF; cursor:pointer; }
+    input[type="range"]::-moz-range-track { height:4px; border-radius:2px; }
+
+    @keyframes fadeUp   { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes pulse    { 0%,100% { opacity:.2; } 50% { opacity:.52; } }
+    @keyframes slideIn  { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+    .fade-up  { animation:fadeUp  0.3s ease both; }
+    .pulse    { animation:pulse   1.65s ease-in-out infinite; }
+    .panel-in { animation:slideIn 0.22s ease both; }
+    .prog-bar { transition:width 0.7s cubic-bezier(0.4,0,0.2,1); }
+
+    ::-webkit-scrollbar       { width:4px; }
+    ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:2px; }
+    select, button { font-family:'IBM Plex Sans', sans-serif; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+/* ══════════════════════════════════════════
+   CATALOG  (data/songs.csv)
+══════════════════════════════════════════ */
+const SONGS = [
+  {id:1,  title:"Sunrise City",        artist:"Neon Echo",         genre:"pop",        mood:"happy",      energy:0.82, acousticness:0.18},
+  {id:2,  title:"Midnight Coding",     artist:"LoRoom",            genre:"lofi",       mood:"chill",      energy:0.42, acousticness:0.71},
+  {id:3,  title:"Storm Runner",        artist:"Voltline",          genre:"rock",       mood:"intense",    energy:0.91, acousticness:0.10},
+  {id:4,  title:"Library Rain",        artist:"Paper Lanterns",    genre:"lofi",       mood:"chill",      energy:0.35, acousticness:0.86},
+  {id:5,  title:"Gym Hero",            artist:"Max Pulse",         genre:"pop",        mood:"intense",    energy:0.93, acousticness:0.05},
+  {id:6,  title:"Spacewalk Thoughts",  artist:"Orbit Bloom",       genre:"ambient",    mood:"chill",      energy:0.28, acousticness:0.92},
+  {id:7,  title:"Coffee Shop Stories", artist:"Slow Stereo",       genre:"jazz",       mood:"relaxed",    energy:0.37, acousticness:0.89},
+  {id:8,  title:"Night Drive Loop",    artist:"Neon Echo",         genre:"synthwave",  mood:"moody",      energy:0.75, acousticness:0.22},
+  {id:9,  title:"Focus Flow",          artist:"LoRoom",            genre:"lofi",       mood:"focused",    energy:0.40, acousticness:0.78},
+  {id:10, title:"Rooftop Lights",      artist:"Indigo Parade",     genre:"indie pop",  mood:"happy",      energy:0.76, acousticness:0.35},
+  {id:11, title:"Golden Fields",       artist:"Southern Compass",  genre:"country",    mood:"nostalgic",  energy:0.55, acousticness:0.74},
+  {id:12, title:"Block Party Groove",  artist:"Urban Pulse",       genre:"hip-hop",    mood:"energetic",  energy:0.87, acousticness:0.08},
+  {id:13, title:"Sonata No. 3",        artist:"Clara Wren",        genre:"classical",  mood:"melancholic", energy:0.22, acousticness:0.97},
+  {id:14, title:"Velvet Nights",       artist:"The RnB Duo",       genre:"rnb",        mood:"romantic",   energy:0.60, acousticness:0.30},
+  {id:15, title:"Neon Rage",           artist:"Static Wolves",     genre:"metal",      mood:"intense",    energy:0.96, acousticness:0.04},
+  {id:16, title:"Superstition Groove", artist:"Funkadelic Jr.",    genre:"funk",       mood:"happy",      energy:0.78, acousticness:0.15},
+  {id:17, title:"Binary Sunset",       artist:"Synthex",           genre:"electronic", mood:"focused",    energy:0.65, acousticness:0.06},
+  {id:18, title:"Rainy Porch",         artist:"Sol Lento",         genre:"country",    mood:"relaxed",    energy:0.33, acousticness:0.88},
+];
+
+const GENRES = [...new Set(SONGS.map(s => s.genre))].sort();
+const MOODS  = [...new Set(SONGS.map(s => s.mood))].sort();
+const MAX_SCORE = 7.0;
+
+const SCORING_MODES = {
+  "genre-first":  {genre:3.0, mood:2.0, energy:1.0, acoustic:1.0},
+  "mood-first":   {genre:1.5, mood:4.0, energy:1.0, acoustic:1.0},
+  "energy-focus": {genre:1.0, mood:1.0, energy:3.0, acoustic:1.0},
+};
+const MODE_LABELS = {"genre-first":"Genre-first","mood-first":"Mood-first","energy-focus":"Energy-focus"};
+
+/* ══════════════════════════════════════════
+   SCORING  (src/recommender.py)
+══════════════════════════════════════════ */
+function scoreSong(prefs, song, w) {
+  let score = 0, genreMatch = false, moodMatch = false, acousticBonus = false;
+  if (song.genre === prefs.genre) { score += w.genre;   genreMatch    = true; }
+  if (song.mood  === prefs.mood)  { score += w.mood;    moodMatch     = true; }
+  score += Math.max(0, 1 - Math.abs(song.energy - prefs.energy)) * w.energy;
+  if (prefs.likesAcoustic && song.acousticness > 0.6) { score += w.acoustic; acousticBonus = true; }
+  return { score, genreMatch, moodMatch, acousticBonus };
+}
+
+function getRecommendations(prefs, modeName, k = 5) {
+  const w = SCORING_MODES[modeName];
+  const scored = SONGS.map(song => ({ song, ...scoreSong(prefs, song, w) }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k);
+}
+
+/* ══════════════════════════════════════════
+   GUARDRAILS  (src/guardrails.py)
+══════════════════════════════════════════ */
+function runGuardrails(text, candidates) {
+  return [
+    {label:"Non-empty response",    pass:!!(text && text.trim())},
+    {label:"Min 40 characters",     pass:text.trim().length >= 40},
+    {label:"No negative scores",    pass:candidates.every(c => c.score >= 0)},
+    {label:"Song title referenced", pass:candidates.some(c =>
+      text.toLowerCase().includes(c.song.title.toLowerCase()))},
+  ];
+}
+
+/* ══════════════════════════════════════════
+   PROMPT  (src/rag.py)
+══════════════════════════════════════════ */
+function buildPrompt(prefs, results, modeName) {
+  const catalog = SONGS.map(s =>
+    `• ${s.title} (${s.artist}): genre=${s.genre}, mood=${s.mood}, energy=${s.energy}, acousticness=${s.acousticness}`
+  ).join('\n');
+  const tops = results.map((r, i) => {
+    const m = [r.genreMatch&&'genre✓', r.moodMatch&&'mood✓', r.acousticBonus&&'acoustic✓']
+      .filter(Boolean).join(' ') || 'energy proximity only';
+    return `  ${i + 1}. "${r.song.title}" — ${r.score.toFixed(2)}/7.0 [${m}]`;
+  }).join('\n');
+  return `You are a music recommendation analyst for VibeFinder.
+CATALOG (18 songs only — never invent titles):
+${catalog}
+USER PROFILE: genre=${prefs.genre}, mood=${prefs.mood}, energy=${prefs.energy.toFixed(2)}, acoustic=${prefs.likesAcoustic}, mode=${modeName}
+TOP ${results.length} (max 7.0):
+${tops}
+Write 2–3 sentences of flowing prose: name songs, explain signals, flag catalog gaps if top score <3.0. No bullets or headers.`;
+}
+
+/* ══════════════════════════════════════════
+   BASE TOKENS  (static, palette-independent)
+══════════════════════════════════════════ */
+const C = {
+  bg: '#0F0F0F', surface: '#1A1A1A', elevated: '#222222',
+  border: 'rgba(255,255,255,0.09)', text: '#F2F2F2', sub: '#AAAAAA',
+  muted: '#5E5E5E', inputBg: '#262626', inputBorder: 'rgba(255,255,255,0.14)',
+  amber: '#F59E0B', amberBg: 'rgba(245,158,11,0.08)', amberBorder: 'rgba(245,158,11,0.24)',
+  topRow: '#1F1F1F', panelShadow: '0 12px 48px rgba(0,0,0,0.6)',
+};
+
+/* ══════════════════════════════════════════
+   TWEAKS SYSTEM
+   Three controls that reshape the *feel*,
+   not individual pixel properties:
+
+   1. PALETTE — shifts the entire color register.
+      Changes accent, acoustic tint, CTA button,
+      and active pill color simultaneously.
+
+   2. DENSITY — changes how the UI breathes.
+      Focused = compact data tool.
+      Airy    = editorial music discovery.
+
+   3. SCORES — changes how results are spoken.
+      Numeric = analyst. Percent = consumer.
+      Grade   = opinionated. Bars = visual.
+══════════════════════════════════════════ */
+const PALETTES = {
+  Forest: {accent:'#1DB954', acoustic:'#60A5FA', swatch:'#1DB954'},
+  Ember:  {accent:'#F97316', acoustic:'#FBBF24', swatch:'#F97316'},
+  Ocean:  {accent:'#22D3EE', acoustic:'#A78BFA', swatch:'#22D3EE'},
+  Mono:   {accent:'#D4D4D4', acoustic:'#888888', swatch:'#D4D4D4'},
+};
+
+const DENSITIES = {
+  Focused:  {rowPad:'10px 14px 8px',  titleSz:13, metaSz:10, scoreSz:12, rankW:18, barH:2, barMl:30, panelPad:'16px 18px 14px', inGap:16, sectionMb:16},
+  Balanced: {rowPad:'14px 16px 11px', titleSz:14, metaSz:11, scoreSz:13, rankW:20, barH:3, barMl:34, panelPad:'22px 22px 20px', inGap:22, sectionMb:22},
+  Airy:     {rowPad:'20px 20px 16px', titleSz:15, metaSz:12, scoreSz:14, rankW:22, barH:5, barMl:38, panelPad:'30px 26px 26px', inGap:28, sectionMb:28},
+};
+
+function toGrade(ratio) {
+  if (ratio >= 0.90) return 'A+';
+  if (ratio >= 0.80) return 'A';
+  if (ratio >= 0.70) return 'B+';
+  if (ratio >= 0.60) return 'B';
+  if (ratio >= 0.50) return 'C+';
+  if (ratio >= 0.40) return 'C';
+  if (ratio >= 0.30) return 'D';
+  return 'F';
+}
+
+function formatScore(score, mode) {
+  if (mode === 'Numeric') return score.toFixed(2);
+  if (mode === 'Percent') return Math.round(score / MAX_SCORE * 100) + '%';
+  if (mode === 'Grade')   return toGrade(score / MAX_SCORE);
+  return null; // 'Bars' → no number shown
+}
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{palette:'Forest', density:'Balanced', scores:'Numeric'}/*EDITMODE-END*/;
+
+/* ══════════════════════════════════════════
+   FIX 4 — CUSTOM CHECKBOX
+   Native input[type=checkbox] overridden by
+   Streamlit accent-color CSS. Replaced with a
+   fully custom div-based React component.
+══════════════════════════════════════════ */
+function Checkbox({ checked, onChange, label, accent }) {
+  return (
+    <div
+      role="checkbox" aria-checked={checked} tabIndex={0}
+      onClick={() => onChange(!checked)}
+      onKeyDown={e => (e.key===' '||e.key==='Enter') && onChange(!checked)}
+      style={{display:'flex', alignItems:'center', gap:11, cursor:'pointer', userSelect:'none', outline:'none'}}
+    >
+      <div style={{
+        width:17, height:17, borderRadius:4, flexShrink:0,
+        backgroundColor: checked ? accent : 'transparent',
+        border: `1.5px solid ${checked ? accent : 'rgba(255,255,255,0.28)'}`,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        transition:'background-color 0.14s, border-color 0.14s',
+      }}>
+        {checked && (
+          <svg width="10" height="7" viewBox="0 0 10 7" fill="none">
+            <path d="M1 3.5L3.8 6L9 1" stroke="#111" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </div>
+      <span style={{fontSize:14, color:C.sub}}>{label}</span>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FIX 3 — ENERGY SLIDER
+   Track fill set as inline style.background —
+   immune to Streamlit's accent-color cascade.
+══════════════════════════════════════════ */
+function EnergySlider({ value, onChange, accent }) {
+  const pct     = (value * 100).toFixed(3);
+  const trackBg = `linear-gradient(to right, ${accent} 0%, ${accent} ${pct}%, rgba(255,255,255,0.13) ${pct}%, rgba(255,255,255,0.13) 100%)`;
+  return (
+    <div>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10}}>
+        <span style={{fontSize:10, textTransform:'uppercase', letterSpacing:'0.09em', fontWeight:600, color:C.muted}}>
+          Target energy
+        </span>
+        <span style={{fontSize:13, fontFamily:"'IBM Plex Mono', monospace", color:C.sub}}>
+          {value.toFixed(2)}
+        </span>
+      </div>
+      <div style={{display:'flex', alignItems:'center', gap:12}}>
+        <span style={{fontSize:11, color:C.muted, minWidth:22}}>0.0</span>
+        <input type="range" min="0" max="1" step="0.01" value={value}
+          onChange={e => onChange(parseFloat(e.target.value))}
+          style={{flex:1, background:trackBg}} />
+        <span style={{fontSize:11, color:C.muted, minWidth:22, textAlign:'right'}}>1.0</span>
+      </div>
+    </div>
+  );
+}
+
+/* SELECT FIELD */
+function SelectField({ label, value, options, onChange }) {
+  return (
+    <div style={{flex:1, minWidth:0}}>
+      <div style={{fontSize:10, color:C.muted, textTransform:'uppercase', letterSpacing:'0.09em', fontWeight:600, marginBottom:7}}>
+        {label}
+      </div>
+      <div style={{position:'relative'}}>
+        <select value={value} onChange={e => onChange(e.target.value)} style={{
+          width:'100%', padding:'10px 32px 10px 13px',
+          backgroundColor:C.inputBg, color:C.text,
+          border:`1px solid ${C.inputBorder}`, borderRadius:7,
+          fontSize:14, appearance:'none', cursor:'pointer', outline:'none',
+        }}>
+          {options.map(o => (
+            <option key={o} value={o} style={{backgroundColor:'#1A1A1A', color:C.text}}>{o}</option>
+          ))}
+        </select>
+        <span style={{position:'absolute', right:11, top:'50%', transform:'translateY(-50%)',
+          pointerEvents:'none', color:C.sub, fontSize:10}}>▾</span>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   FIX 5 — SCORING MODE PILLS
+   Pure <button> elements, all styles inline.
+   Also thread palette accent for active state.
+══════════════════════════════════════════ */
+function ScoringModePicker({ mode, setMode, accent }) {
+  return (
+    <div>
+      <div style={{fontSize:10, color:C.muted, textTransform:'uppercase', letterSpacing:'0.09em', fontWeight:600, marginBottom:10}}>
+        Scoring mode
+      </div>
+      <div style={{display:'flex', gap:8}}>
+        {Object.keys(SCORING_MODES).map(k => {
+          const active = mode === k;
+          return (
+            <button key={k} type="button" onClick={() => setMode(k)} style={{
+              padding:'8px 18px', borderRadius:22, cursor:'pointer',
+              fontSize:13, fontWeight: active ? 500 : 400,
+              fontFamily:"'IBM Plex Sans', sans-serif",
+              backgroundColor: active ? accent      : 'transparent',
+              color:           active ? '#111111'   : '#999999',
+              border:          active ? 'none'      : '1px solid rgba(255,255,255,0.2)',
+              outline:'none', transition:'background-color 0.14s, color 0.14s',
+            }}>
+              {MODE_LABELS[k]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* TAG */
+function Tag({ label, color }) {
+  return (
+    <span style={{
+      fontSize:9, fontWeight:500, letterSpacing:'0.04em', textTransform:'uppercase',
+      color, backgroundColor:color+'1C', border:`1px solid ${color}3A`,
+      padding:'2px 7px', borderRadius:3, whiteSpace:'nowrap',
+    }}>{label}</span>
+  );
+}
+
+/* ══════════════════════════════════════════
+   TRACK ROW — threads palette, density, scoreMode
+══════════════════════════════════════════ */
+function TrackRow({ rank, result, isTop, isLast, pal, den, scoreMode }) {
+  const { song, score, genreMatch, moodMatch, acousticBonus } = result;
+  const pct       = Math.min(100, (score / MAX_SCORE) * 100);
+  const scoreText = formatScore(score, scoreMode);
+
+  return (
+    <div style={{
+      backgroundColor: isTop ? C.topRow : 'transparent',
+      borderBottom: isLast ? 'none' : `1px solid ${C.border}`,
+      padding: den.rowPad,
+    }}>
+      <div style={{display:'flex', alignItems:'center', gap:den.inGap - 2}}>
+        {/* Rank */}
+        <span style={{fontSize:10, fontFamily:"'IBM Plex Mono', monospace", color:C.muted, minWidth:den.rankW, textAlign:'right', flexShrink:0}}>
+          {String(rank).padStart(2,'0')}
+        </span>
+
+        {/* Title + meta */}
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{fontSize:den.titleSz, fontWeight:500, color:C.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+            {song.title}
+          </div>
+          <div style={{fontSize:den.metaSz, color:C.muted, marginTop:2, letterSpacing:'0.01em'}}>
+            {song.artist} · {song.genre} · {song.mood}
+          </div>
+        </div>
+
+        {/* Score (hidden in Bars mode) */}
+        {scoreText !== null && (
+          <span style={{fontSize:den.scoreSz, fontFamily:"'IBM Plex Mono', monospace", fontWeight:500, color:C.sub, minWidth:38, textAlign:'right', flexShrink:0}}>
+            {scoreText}
+          </span>
+        )}
+
+        {/* Tags */}
+        <div style={{display:'flex', gap:4, flexShrink:0}}>
+          {genreMatch    && <Tag label="genre"    color={pal.accent}   />}
+          {moodMatch     && <Tag label="mood"     color={pal.accent}   />}
+          {acousticBonus && <Tag label="acoustic" color={pal.acoustic} />}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{
+        height:den.barH, backgroundColor:'rgba(255,255,255,0.08)',
+        borderRadius:den.barH, marginTop:scoreMode==='Bars' ? 12 : 10,
+        marginLeft:den.barMl, overflow:'hidden',
+      }}>
+        <div className="prog-bar" style={{height:'100%', width:`${pct}%`, backgroundColor:pal.accent, borderRadius:den.barH}} />
+      </div>
+    </div>
+  );
+}
+
+/* AI CARD */
+function AICard({ explanation, guardrails, passedCount, loading, accent }) {
+  return (
+    <div style={{backgroundColor:C.elevated, border:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden'}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 20px', borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:'flex', alignItems:'center', gap:7}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill={accent}>
+            <path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74z"/>
+          </svg>
+          <span style={{fontSize:9, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, color:C.muted}}>AI Explanation</span>
+        </div>
+        <span style={{fontSize:10, fontFamily:"'IBM Plex Mono', monospace", color:C.muted}}>Claude · Haiku</span>
+      </div>
+      <div style={{padding:'22px 20px 18px'}}>
+        {loading ? (
+          <div className="pulse">
+            <div style={{height:14, backgroundColor:'rgba(255,255,255,0.09)', borderRadius:3, marginBottom:10}}></div>
+            <div style={{height:14, backgroundColor:'rgba(255,255,255,0.09)', borderRadius:3, width:'85%', marginBottom:10}}></div>
+            <div style={{height:14, backgroundColor:'rgba(255,255,255,0.09)', borderRadius:3, width:'68%'}}></div>
+          </div>
+        ) : (
+          <p style={{fontSize:15, lineHeight:1.82, color:C.text, fontWeight:300}}>{explanation}</p>
+        )}
+      </div>
+      {!loading && guardrails && (
+        <div style={{display:'flex', gap:10, flexWrap:'wrap', padding:'11px 20px', borderTop:`1px solid ${C.border}`}}>
+          {[
+            {svg:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>, label:`${passedCount} guardrail${passedCount!==1?'s':''} passed`},
+            {svg:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>, label:'18 songs in context'},
+          ].map(chip => (
+            <div key={chip.label} style={{display:'flex', alignItems:'center', gap:6, fontSize:11, color:C.muted, backgroundColor:C.inputBg, padding:'4px 10px', borderRadius:4, border:`1px solid ${C.border}`}}>
+              {chip.svg}<span>{chip.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* GAP ALERT */
+function GapAlert() {
+  return (
+    <div className="fade-up" style={{display:'flex', alignItems:'flex-start', gap:10, padding:'12px 16px', marginTop:14, backgroundColor:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:8}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth="2" strokeLinecap="round" style={{flexShrink:0, marginTop:2}}>
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill={C.amber}/>
+      </svg>
+      <span style={{fontSize:13, color:C.amber, lineHeight:1.55}}>Limited catalog coverage — results may not fully match your preferences.</span>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   TWEAKS PANEL
+   position:fixed is fine inside a Streamlit
+   iframe — it anchors to the iframe viewport,
+   not the parent page. Only position:sticky
+   is unreliable in Streamlit's scroll context.
+══════════════════════════════════════════ */
+function TweaksPanel({ tweaks, setTweak, onClose }) {
+
+  /* Reusable segmented pill row */
+  function SegRow({ opts, val, onChange }) {
+    return (
+      <div style={{display:'flex', gap:5, flexWrap:'wrap'}}>
+        {opts.map(o => {
+          const active = val === o;
+          return (
+            <button key={o} type="button" onClick={() => onChange(o)} style={{
+              padding:'5px 12px', borderRadius:20, fontSize:12,
+              fontWeight: active ? 500 : 400,
+              fontFamily:"'IBM Plex Sans', sans-serif",
+              backgroundColor: active ? '#FFFFFF' : 'transparent',
+              color:           active ? '#111'    : '#888',
+              border:          active ? 'none'    : '1px solid rgba(255,255,255,0.18)',
+              cursor:'pointer', outline:'none',
+              transition:'background-color 0.12s, color 0.12s',
+            }}>{o}</button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function SectionHead({ children }) {
+    return (
+      <div style={{fontSize:9, color:C.muted, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, marginBottom:10}}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel-in" style={{
+      position:'fixed', bottom:24, right:24,
+      backgroundColor:'#1E1E1E',
+      border:`1px solid rgba(255,255,255,0.12)`,
+      borderRadius:13, padding:'18px 20px 22px',
+      width:256, zIndex:200,
+      boxShadow:C.panelShadow,
+    }}>
+      {/* Header */}
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20}}>
+        <span style={{fontWeight:600, fontSize:13, color:C.text, letterSpacing:'-0.2px'}}>Tweaks</span>
+        <button type="button" onClick={onClose} style={{
+          background:'none', border:'none', color:C.muted,
+          cursor:'pointer', fontSize:20, lineHeight:1, padding:'0 2px', outline:'none',
+        }}>×</button>
+      </div>
+
+      {/* ── Palette ──────────────────────────
+          Four swatches. Each changes accent,
+          acoustic tint, and CTA button color —
+          the entire emotional register at once. */}
+      <div style={{marginBottom:20}}>
+        <SectionHead>Palette</SectionHead>
+        <div style={{display:'flex', gap:16, alignItems:'flex-start'}}>
+          {Object.entries(PALETTES).map(([name, pal]) => {
+            const active = tweaks.palette === name;
+            return (
+              <button key={name} type="button" onClick={() => setTweak('palette', name)} style={{
+                display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                background:'none', border:'none', cursor:'pointer', padding:0, outline:'none',
+              }}>
+                <div style={{
+                  width:26, height:26, borderRadius:'50%',
+                  backgroundColor:pal.swatch,
+                  outline: active ? `2px solid ${C.text}` : '2px solid transparent',
+                  outlineOffset:2,
+                  transform: active ? 'scale(1.18)' : 'scale(1)',
+                  transition:'transform 0.14s, outline-color 0.14s',
+                }} />
+                <span style={{fontSize:9, color: active ? C.text : C.muted, letterSpacing:'0.02em'}}>{name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Density ──────────────────────────
+          Focused = compact data tool.
+          Airy    = editorial music discovery. */}
+      <div style={{marginBottom:20}}>
+        <SectionHead>Layout</SectionHead>
+        <SegRow opts={['Focused','Balanced','Airy']} val={tweaks.density} onChange={v => setTweak('density', v)} />
+      </div>
+
+      {/* ── Score language ───────────────────
+          How recommendations are communicated:
+          analyst → consumer → opinionated → visual. */}
+      <div>
+        <SectionHead>Scores</SectionHead>
+        <SegRow opts={['Numeric','Percent','Grade','Bars']} val={tweaks.scores} onChange={v => setTweak('scores', v)} />
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   ROOT APP
+
+   Streamlit bug fixes applied throughout:
+   ① Header is position:static (not sticky)
+   ② Panel is a plain div — no overflow:hidden
+   ③ Slider fill is an inline style.background
+   ④ Checkbox is a custom div (no native input)
+   ⑤ Scoring pills are pure <button> elements
+   ⑥ CTA is full-width with all styles inline
+══════════════════════════════════════════ */
+function App() {
+  const [genre,        setGenre]     = useState('pop');
+  const [mood,         setMood]      = useState('happy');
+  const [energy,       setEnergy]    = useState(0.50);
+  const [likesAcoustic, setAcoustic] = useState(false);
+  const [mode,         setMode]      = useState('genre-first');
+
+  const [results,     setResults]   = useState(null);
+  const [explanation, setExpl]      = useState('');
+  const [guardrails,  setGuards]    = useState(null);
+  const [loading,     setLoading]   = useState(false);
+
+  /* Tweaks state */
+  const [tweaks,     setTweaksAll]  = useState(TWEAK_DEFAULTS);
+  const [showTweaks, setShowTweaks] = useState(false);
+
+  /* Tweaks protocol — wires this component to the host toolbar */
+  useEffect(() => {
+    const handler = e => {
+      if (e.data?.type === '__activate_edit_mode')   setShowTweaks(true);
+      if (e.data?.type === '__deactivate_edit_mode') setShowTweaks(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({type:'__edit_mode_available'}, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  function setTweak(key, val) {
+    const next = {...tweaks, [key]: val};
+    setTweaksAll(next);
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits: next}, '*');
+  }
+
+  /* Derived palette + density */
+  const pal = PALETTES[tweaks.palette]  || PALETTES.Forest;
+  const den = DENSITIES[tweaks.density] || DENSITIES.Balanced;
+
+  async function handleSubmit() {
+    setLoading(true);
+    setResults(null);
+    setExpl('');
+    setGuards(null);
+    const prefs = {genre, mood, energy, likesAcoustic};
+    const recs  = getRecommendations(prefs, mode, 5);
+    setResults(recs);
+    try {
+      const raw  = await window.claude.complete(buildPrompt(prefs, recs, mode));
+      const text = raw.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+      setExpl(text);
+      setGuards(runGuardrails(text, recs));
+    } catch (_) {
+      const fb = 'Unable to generate AI explanation at this time.';
+      setExpl(fb);
+      setGuards(runGuardrails(fb, recs));
+    }
+    setLoading(false);
+  }
+
+  const topScore    = results?.[0]?.score ?? 0;
+  const showGap     = results && !loading && topScore < MAX_SCORE * 0.4;
+  const passedCount = guardrails ? guardrails.filter(g => g.pass).length : 0;
+
+  /* FIX 6 — CTA button color follows palette */
+  const ctaBg = loading ? '#3A3A3A' : pal.accent;
+  const ctaFg = loading ? '#888888' : '#111111';
+
+  return (
+    <div style={{backgroundColor:C.bg, color:C.text, minHeight:'100vh', paddingBottom:80}}>
+
+      {/* ① Static header — no position:sticky */}
+      <header style={{
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'0 24px', height:52,
+        backgroundColor:C.surface,
+        borderBottom:`1px solid ${C.border}`,
+        /* position is static (default) — no sticky */
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <span style={{fontWeight:600, fontSize:16, letterSpacing:'-0.4px', color:C.text}}>VibeFinder</span>
+          <span style={{fontSize:9, fontFamily:"'IBM Plex Mono', monospace", color:C.muted, backgroundColor:C.inputBg, padding:'3px 8px', borderRadius:3, letterSpacing:'0.04em'}}>
+            RAG · Claude API
+          </span>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <span style={{fontSize:12, fontFamily:"'IBM Plex Mono', monospace", color:C.muted}}>
+            {MODE_LABELS[mode]}
+          </span>
+          <button type="button" onClick={() => setShowTweaks(v => !v)} style={{
+            background:'none', border:'1px solid rgba(255,255,255,0.18)',
+            color:C.sub, cursor:'pointer', fontSize:11, padding:'4px 10px',
+            borderRadius:5, fontFamily:"'IBM Plex Sans', sans-serif", outline:'none',
+            letterSpacing:'0.02em',
+          }}>Tweaks</button>
+        </div>
+      </header>
+
+      <main style={{maxWidth:700, margin:'0 auto', padding:`${den.sectionMb}px 20px 0`}}>
+
+        {/* ② Plain panel div — no overflow:hidden gotchas */}
+        <div style={{
+          backgroundColor:C.surface,
+          border:`1px solid ${C.border}`,
+          borderRadius:10,
+          padding: den.panelPad,
+          marginBottom:20,
+        }}>
+          {/* Genre + Mood */}
+          <div style={{display:'flex', gap:16, marginBottom:den.sectionMb}}>
+            <SelectField label="Favorite genre" value={genre} options={GENRES} onChange={setGenre} />
+            <SelectField label="Favorite mood"  value={mood}  options={MOODS}  onChange={setMood}  />
+          </div>
+
+          {/* ③ Energy slider — inline background */}
+          <div style={{marginBottom:den.sectionMb}}>
+            <EnergySlider value={energy} onChange={setEnergy} accent={pal.accent} />
+          </div>
+
+          {/* ④ Custom checkbox */}
+          <div style={{marginBottom:den.sectionMb}}>
+            <Checkbox checked={likesAcoustic} onChange={setAcoustic} label="Likes acoustic music" accent={pal.accent} />
+          </div>
+
+          {/* ⑤ Scoring mode — pure button elements */}
+          <div style={{marginBottom:den.sectionMb}}>
+            <ScoringModePicker mode={mode} setMode={setMode} accent={pal.accent} />
+          </div>
+
+          {/* ⑥ Full-width CTA — all styles inline, follows palette */}
+          <button type="button" onClick={handleSubmit} disabled={loading} style={{
+            display:'block', width:'100%', padding:'14px 0',
+            backgroundColor: ctaBg, color: ctaFg,
+            border:'1px solid transparent', borderRadius:8,
+            fontSize:15, fontWeight:600, letterSpacing:'-0.1px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            fontFamily:"'IBM Plex Sans', sans-serif",
+            transition:'background-color 0.2s, opacity 0.15s',
+            outline:'none',
+          }}>
+            {loading ? 'Finding your vibe…' : 'Find my vibe'}
+          </button>
+        </div>
+
+        {/* Results */}
+        {(results || loading) && (
+          <div className="fade-up">
+            <AICard explanation={explanation} guardrails={guardrails} passedCount={passedCount} loading={loading} accent={pal.accent} />
+            {showGap && <GapAlert />}
+            {results && !loading && (
+              <div style={{marginTop:24}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, padding:'0 2px'}}>
+                  <span style={{fontSize:9, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600, color:C.muted}}>
+                    Recommendations
+                  </span>
+                  <span style={{fontSize:10, fontFamily:"'IBM Plex Mono', monospace", color:C.muted}}>
+                    {MODE_LABELS[mode]}
+                  </span>
+                </div>
+                <div style={{backgroundColor:C.surface, border:`1px solid ${C.border}`, borderRadius:10, overflow:'hidden'}}>
+                  {results.map((r, i) => (
+                    <TrackRow
+                      key={r.song.id} rank={i+1} result={r}
+                      isTop={i===0} isLast={i===results.length-1}
+                      pal={pal} den={den} scoreMode={tweaks.scores}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Tweaks panel */}
+      {showTweaks && (
+        <TweaksPanel
+          tweaks={tweaks}
+          setTweak={setTweak}
+          onClose={() => setShowTweaks(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
